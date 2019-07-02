@@ -1,0 +1,8 @@
+prefix=/home/sean_hastings/catkin_ws/devel
+
+Name: masker
+Description: Description of masker
+Version: 0.0.0
+Cflags: 
+Libs: -L/home/sean_hastings/catkin_ws/devel/lib 
+Requires: 
