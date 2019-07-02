@@ -17,16 +17,16 @@ from autolab_core import YamlConfig
 
 class image_converter:
 
-  def __init__(self, config, graph):
+  def __init__(self, config):
     self.config = config
-    self.graph = graph
+    self.load_model()
 
     self.mask_pub = rospy.Publisher("mask_topic",Image, queue_size=10)
 
     self.bridge = CvBridge()
     self.image_sub = rospy.Subscriber("image_topic",Image,self.callback)
 
-  def callback(self,data):
+  def callback(self, data):
     try:
       cv_image = self.bridge.imgmsg_to_cv2(data, "rgb8")
     except CvBridgeError as e:
@@ -34,6 +34,8 @@ class image_converter:
     cv2.imshow("Image window", cv_image)
     cv2.waitKey(3)
     np_image = np.asarray(cv_image)
+
+
 
     global model
     with self.graph.as_default():
@@ -46,48 +48,36 @@ class image_converter:
       self.mask_pub.publish(self.bridge.cv2_to_imgmsg(masks))
     except CvBridgeError as e:
       print(e)
+  
+  def load_model(self):
+    image_shape = self.config['model']['settings']['image_shape']
+    self.config['model']['settings']['image_min_dim'] = min(image_shape)
+    self.config['model']['settings']['image_max_dim'] = max(image_shape)
+    self.config['model']['settings']['gpu_count'] = 1
+    self.config['model']['settings']['images_per_gpu'] = 1
+    inference_config = MaskConfig(self.config['model']['settings'])
 
+    global model
+    model_dir, _ = os.path.split(self.config['model']['path'])
+    self.model = modellib.MaskRCNN(mode=self.config['model']['mode'], config=inference_config, model_dir=model_dir)
 
-
-def camtest(config):
-  #image = data.camera()
-  image = cv2.resize(cv2.imread('/home/sean_hastings/sd-maskrcnn/datasets/wisdom/wisdom-real/high-res/depth_ims/image_000000.png'), dsize=(512, 512))
-  print(image.shape)
-
-  image_shape = config['model']['settings']['image_shape']
-  config['model']['settings']['image_min_dim'] = min(image_shape)
-  config['model']['settings']['image_max_dim'] = max(image_shape)
-  config['model']['settings']['gpu_count'] = 1
-  config['model']['settings']['images_per_gpu'] = 1
-  inference_config = MaskConfig(config['model']['settings'])
-
-  global model
-  model_dir, _ = os.path.split(config['model']['path'])
-  model = modellib.MaskRCNN(mode=config['model']['mode'], config=inference_config, model_dir=model_dir)
-
-  # Load trained weights
-  print("Loading weights from ", config['model']['path'])
-  model.load_weights('/home/sean_hastings/sd-maskrcnn/' + config['model']['path'], by_name=True)
+    # Load trained weights
+    print("Loading weights from ", config['model']['path'])
+    self.model.load_weights(self.config['model']['path'], by_name=True)
 	
-  graph = tf.get_default_graph()
+    self.graph = tf.get_default_graph()
 
-  result = model.detect([image], verbose=0)[0]
-  masks = result['masks']
-  print(masks.shape)
-
-  return graph
 
 
 def main(args):
-  config = YamlConfig('/home/sean_hastings/sd-maskrcnn/cfg/benchmark.yaml')
+  config = YamlConfig(args[0]) # '/home/sean_hastings/sd-maskrcnn/cfg/benchmark.yaml'
 
   tf_config = tf.ConfigProto()
   tf_config.gpu_options.allow_growth = True
   with tf.Session(config=tf_config) as sess:
     set_session(sess)
-    graph = camtest(config)
 
-    ic = image_converter(config, graph)
+    ic = image_converter(config)
     rospy.init_node('image_converter2', anonymous=True)
     try:
       rospy.spin()
@@ -97,4 +87,4 @@ def main(args):
       cv2.destroyAllWindows()
 
 if __name__ == '__main__':
-  main(sys.argv)
+  main(sys.argv[1:])
