@@ -72,3 +72,4 @@ yes | pip install keras
 
 
 sed -i -e 's/use_multiprocessing=True/use_multiprocessing=False/g' maskrcnn/mrcnn/model.py
+sed -i -e 's/workers=workers/workers=1/g' maskrcnn/mrcnn/model.py
